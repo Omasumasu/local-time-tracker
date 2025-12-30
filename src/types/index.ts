@@ -3,6 +3,7 @@ export interface Folder {
   id: string;
   name: string;
   color: string;
+  icon: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -11,11 +12,13 @@ export interface Folder {
 export interface CreateFolder {
   name: string;
   color?: string;
+  icon?: string;
 }
 
 export interface UpdateFolder {
   name?: string;
   color?: string;
+  icon?: string;
   sort_order?: number;
 }
 

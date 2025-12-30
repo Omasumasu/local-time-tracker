@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Local Time Tracker",
+  "productName": "ローカルタイムトラッカー",
   "version": "0.1.0",
   "identifier": "com.local-time-tracker.app",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Time Tracker",
+        "title": "ローカルタイムトラッカー",
         "width": 1024,
         "height": 768,
         "minWidth": 800,

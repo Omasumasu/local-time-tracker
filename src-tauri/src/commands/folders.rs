@@ -12,6 +12,7 @@ pub struct Folder {
     pub id: Uuid,
     pub name: String,
     pub color: String,
+    pub icon: Option<String>,
     pub sort_order: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -22,6 +23,7 @@ pub struct Folder {
 pub struct CreateFolder {
     pub name: String,
     pub color: Option<String>,
+    pub icon: Option<String>,
 }
 
 /// フォルダ更新リクエスト
@@ -29,13 +31,14 @@ pub struct CreateFolder {
 pub struct UpdateFolder {
     pub name: Option<String>,
     pub color: Option<String>,
+    pub icon: Option<String>,
     pub sort_order: Option<i32>,
 }
 
 /// フォルダ一覧を取得する
 fn fetch_folders(conn: &Connection) -> AppResult<Vec<Folder>> {
     let sql = r#"
-        SELECT id, name, color, sort_order, created_at, updated_at
+        SELECT id, name, color, icon, sort_order, created_at, updated_at
         FROM folders
         ORDER BY sort_order ASC, created_at ASC
     "#;
@@ -47,9 +50,10 @@ fn fetch_folders(conn: &Connection) -> AppResult<Vec<Folder>> {
             id: Uuid::parse_str(&id_str).unwrap_or_default(),
             name: row.get(1)?,
             color: row.get(2)?,
-            sort_order: row.get(3)?,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
+            icon: row.get(3)?,
+            sort_order: row.get(4)?,
+            created_at: row.get(5)?,
+            updated_at: row.get(6)?,
         })
     })?;
 
@@ -69,6 +73,7 @@ fn create_folder_impl(conn: &Connection, input: CreateFolder) -> AppResult<Folde
     let id = Uuid::new_v4();
     let now = Utc::now();
     let color = input.color.unwrap_or_else(|| "#6b7280".to_string());
+    let icon = input.icon;
 
     // Get max sort_order
     let max_order: i32 = conn
@@ -76,15 +81,16 @@ fn create_folder_impl(conn: &Connection, input: CreateFolder) -> AppResult<Folde
         .unwrap_or(0);
 
     let sql = r#"
-        INSERT INTO folders (id, name, color, sort_order, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO folders (id, name, color, icon, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     "#;
 
-    conn.execute(sql, [
+    conn.execute(sql, duckdb::params![
         id.to_string(),
         input.name.trim().to_string(),
         color.clone(),
-        (max_order + 1).to_string(),
+        icon.clone(),
+        max_order + 1,
         now.to_rfc3339(),
         now.to_rfc3339(),
     ])?;
@@ -93,6 +99,7 @@ fn create_folder_impl(conn: &Connection, input: CreateFolder) -> AppResult<Folde
         id,
         name: input.name.trim().to_string(),
         color,
+        icon,
         sort_order: max_order + 1,
         created_at: now,
         updated_at: now,
@@ -130,6 +137,11 @@ fn update_folder_impl(conn: &Connection, id: Uuid, input: UpdateFolder) -> AppRe
         params.push(color.clone());
     }
 
+    if let Some(icon) = &input.icon {
+        updates.push("icon = ?".to_string());
+        params.push(icon.clone());
+    }
+
     if let Some(sort_order) = input.sort_order {
         updates.push("sort_order = ?".to_string());
         params.push(sort_order.to_string());
@@ -146,7 +158,7 @@ fn update_folder_impl(conn: &Connection, id: Uuid, input: UpdateFolder) -> AppRe
 
     // Fetch updated folder
     let folder = conn.query_row(
-        "SELECT id, name, color, sort_order, created_at, updated_at FROM folders WHERE id = ?",
+        "SELECT id, name, color, icon, sort_order, created_at, updated_at FROM folders WHERE id = ?",
         [id.to_string()],
         |row| {
             let id_str: String = row.get(0)?;
@@ -154,9 +166,10 @@ fn update_folder_impl(conn: &Connection, id: Uuid, input: UpdateFolder) -> AppRe
                 id: Uuid::parse_str(&id_str).unwrap_or_default(),
                 name: row.get(1)?,
                 color: row.get(2)?,
-                sort_order: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                icon: row.get(3)?,
+                sort_order: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
             })
         },
     )?;

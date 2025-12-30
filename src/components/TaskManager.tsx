@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { Plus, Pencil, Archive, ArchiveRestore, Folder, FolderPlus, ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
+import {
+  Plus, Pencil, Archive, ArchiveRestore, Folder, FolderPlus, ChevronRight, ChevronDown, Trash2,
+  Briefcase, Code, FileText, Book, Music, Image, Video, Mail, Calendar, Star, Heart, Settings,
+  Home, User, Users, Globe, Zap, Coffee, Gamepad2, Palette, Camera
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +36,32 @@ import { Separator } from '@/components/ui/separator';
 import { useStore } from '@/hooks/useStore';
 import type { Task, Folder as FolderType } from '@/types';
 
+// Available icons for folders
+const FOLDER_ICONS: Record<string, LucideIcon> = {
+  folder: Folder,
+  briefcase: Briefcase,
+  code: Code,
+  fileText: FileText,
+  book: Book,
+  music: Music,
+  image: Image,
+  video: Video,
+  mail: Mail,
+  calendar: Calendar,
+  star: Star,
+  heart: Heart,
+  settings: Settings,
+  home: Home,
+  user: User,
+  users: Users,
+  globe: Globe,
+  zap: Zap,
+  coffee: Coffee,
+  gamepad: Gamepad2,
+  palette: Palette,
+  camera: Camera,
+};
+
 export function TaskManager() {
   const {
     tasks,
@@ -59,6 +90,7 @@ export function TaskManager() {
   const [folderName, setFolderName] = useState('');
   const [folderColor, setFolderColor] = useState('#6b7280');
   const [deletingFolder, setDeletingFolder] = useState<FolderType | null>(null);
+  const [folderIcon, setFolderIcon] = useState<string>('folder');
 
   const displayedTasks = showArchived
     ? tasks
@@ -151,10 +183,12 @@ export function TaskManager() {
       const newFolder = await createFolder({
         name: folderName.trim(),
         color: folderColor,
+        icon: folderIcon,
       });
       setExpandedFolders((prev) => new Set(prev).add(newFolder.id));
       setFolderName('');
       setFolderColor('#6b7280');
+      setFolderIcon('folder');
       setIsCreatingFolder(false);
     } catch (err) {
       console.error('Failed to create folder:', err);
@@ -168,6 +202,7 @@ export function TaskManager() {
       await updateFolder(editingFolder.id, {
         name: folderName.trim(),
         color: folderColor,
+        icon: folderIcon,
       });
       setEditingFolder(null);
     } catch (err) {
@@ -190,12 +225,14 @@ export function TaskManager() {
     e.stopPropagation();
     setFolderName(folder.name);
     setFolderColor(folder.color);
+    setFolderIcon(folder.icon || 'folder');
     setEditingFolder(folder);
   };
 
   const openCreateFolderDialog = () => {
     setFolderName('');
     setFolderColor('#6b7280');
+    setFolderIcon('folder');
     setIsCreatingFolder(true);
   };
 
@@ -224,6 +261,7 @@ export function TaskManager() {
           {folders.map((folder) => {
             const folderTasks = getTasksByFolderId(folder.id);
             const isExpanded = expandedFolders.has(folder.id);
+            const IconComponent = FOLDER_ICONS[folder.icon || 'folder'] || Folder;
 
             return (
               <div key={folder.id}>
@@ -236,7 +274,7 @@ export function TaskManager() {
                   ) : (
                     <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   )}
-                  <Folder
+                  <IconComponent
                     className="w-4 h-4"
                     style={{ color: folder.color }}
                   />
@@ -462,6 +500,24 @@ export function TaskManager() {
                 onChange={(e) => setFolderName(e.target.value)}
                 placeholder="フォルダ名を入力"
               />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">アイコン</label>
+              <div className="grid grid-cols-8 gap-1 p-2 border rounded-lg bg-muted/30">
+                {Object.entries(FOLDER_ICONS).map(([key, Icon]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setFolderIcon(key)}
+                    className={`p-2 rounded hover:bg-muted transition-colors ${
+                      folderIcon === key ? 'bg-primary text-primary-foreground' : ''
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="space-y-2">

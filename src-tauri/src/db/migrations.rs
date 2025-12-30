@@ -24,6 +24,20 @@ pub fn run_migrations(conn: &Connection) -> AppResult<()> {
         conn.execute_batch("ALTER TABLE tasks ADD COLUMN folder_id VARCHAR")?;
     }
 
+    // Schema upgrade: Add icon column to folders if it doesn't exist
+    let has_icon: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM information_schema.columns
+             WHERE table_name = 'folders' AND column_name = 'icon'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if !has_icon {
+        conn.execute_batch("ALTER TABLE folders ADD COLUMN icon VARCHAR(50)")?;
+    }
+
     Ok(())
 }
 
