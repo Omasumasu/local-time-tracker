@@ -138,11 +138,35 @@ npm run tauri build
 
 アプリケーションデータは以下の場所に保存されます：
 
-- **macOS**: `~/Library/Application Support/com.example.local-time-tracker/`
-- **Windows**: `%APPDATA%\com.example.local-time-tracker\`
-- **Linux**: `~/.local/share/com.example.local-time-tracker/`
+- **macOS**: `~/Library/Application Support/com.localtime.tracker/`
+- **Windows**: `%APPDATA%\com.localtime.tracker\`
+- **Linux**: `~/.local/share/com.localtime.tracker/`
 
 データベースファイル: `time_tracker.db`
+
+## CI/CD
+
+GitHub Actionsで自動ビルド・リリースが設定されています。
+
+### 自動テスト (CI)
+
+PRまたはmainへのpush時に以下が実行されます：
+- TypeScriptの型チェック
+- Rustのユニットテスト
+- 各プラットフォーム（macOS, Windows, Linux）でのビルド確認
+
+### 自動リリース
+
+mainブランチにマージされると：
+1. `tauri.conf.json`のバージョンを確認
+2. 同じバージョンのリリースが存在しない場合、新規リリースを作成
+3. 各プラットフォーム向けにビルド
+4. ビルド成果物をGitHub Releasesにアップロード
+
+**リリース手順:**
+1. `src-tauri/tauri.conf.json`の`version`を更新
+2. PRを作成してmainにマージ
+3. 自動的にリリースが作成される
 
 ## ライセンス
 
