@@ -6,7 +6,24 @@ const MIGRATION_SQL: &str = include_str!("../../migrations/001_initial.sql");
 
 /// マイグレーションを実行する
 pub fn run_migrations(conn: &Connection) -> AppResult<()> {
+    // Run base migrations (creates tables if they don't exist)
     conn.execute_batch(MIGRATION_SQL)?;
+
+    // Schema upgrade: Add folder_id column to tasks if it doesn't exist
+    // (for databases created before folder feature was added)
+    let has_folder_id: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM information_schema.columns
+             WHERE table_name = 'tasks' AND column_name = 'folder_id'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if !has_folder_id {
+        conn.execute_batch("ALTER TABLE tasks ADD COLUMN folder_id VARCHAR")?;
+    }
+
     Ok(())
 }
 

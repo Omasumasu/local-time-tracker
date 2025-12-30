@@ -1,9 +1,12 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { api } from '@/api';
 import type {
+  Folder,
   Task,
   TimeEntryWithRelations,
   Artifact,
+  CreateFolder,
+  UpdateFolder,
   CreateTask,
   UpdateTask,
   UpdateEntry,
@@ -13,6 +16,7 @@ import type {
 } from '@/types';
 
 interface AppState {
+  folders: Folder[];
   tasks: Task[];
   entries: TimeEntryWithRelations[];
   runningEntry: TimeEntryWithRelations | null;
@@ -22,6 +26,7 @@ interface AppState {
 }
 
 const initialState: AppState = {
+  folders: [],
   tasks: [],
   entries: [],
   runningEntry: null,
@@ -67,12 +72,13 @@ export function useStore() {
   const initialize = useCallback(async () => {
     setState({ isLoading: true });
     try {
-      const [tasks, entries, runningEntry] = await Promise.all([
+      const [folders, tasks, entries, runningEntry] = await Promise.all([
+        api.folders.list(),
         api.tasks.list(),
         api.entries.list(),
         api.entries.getRunning(),
       ]);
-      setState({ tasks, entries, runningEntry, isLoading: false });
+      setState({ folders, tasks, entries, runningEntry, isLoading: false });
       startTimerUpdate();
     } catch (err) {
       setState({
@@ -80,6 +86,35 @@ export function useStore() {
         isLoading: false,
       });
     }
+  }, []);
+
+  // Folders
+  const loadFolders = useCallback(async () => {
+    const folders = await api.folders.list();
+    setState({ folders });
+  }, []);
+
+  const createFolder = useCallback(async (folder: CreateFolder) => {
+    const newFolder = await api.folders.create(folder);
+    setState({ folders: [...state.folders, newFolder] });
+    return newFolder;
+  }, []);
+
+  const updateFolder = useCallback(async (id: string, update: UpdateFolder) => {
+    const updatedFolder = await api.folders.update(id, update);
+    setState({
+      folders: state.folders.map((f) => (f.id === id ? updatedFolder : f)),
+    });
+    return updatedFolder;
+  }, []);
+
+  const deleteFolder = useCallback(async (id: string) => {
+    await api.folders.delete(id);
+    setState({
+      folders: state.folders.filter((f) => f.id !== id),
+    });
+    // Reload tasks since their folder_id may have been set to null
+    await loadTasks();
   }, []);
 
   // Tasks
@@ -198,8 +233,8 @@ export function useStore() {
   }, []);
 
   // Reports
-  const getMonthlyReport = useCallback(async (year: number, month: number) => {
-    return api.reports.getMonthlyReport(year, month);
+  const getMonthlyReport = useCallback(async (year: number, month: number, folderId?: string) => {
+    return api.reports.getMonthlyReport(year, month, folderId);
   }, []);
 
   const getAvailableMonths = useCallback(async () => {
@@ -207,6 +242,10 @@ export function useStore() {
   }, []);
 
   // Utilities
+  const getFolderById = useCallback((id: string) => {
+    return state.folders.find((f) => f.id === id);
+  }, []);
+
   const getTaskById = useCallback((id: string) => {
     return state.tasks.find((t) => t.id === id);
   }, []);
@@ -215,9 +254,17 @@ export function useStore() {
     return state.tasks.filter((t) => !t.archived);
   }, []);
 
+  const getTasksByFolder = useCallback((folderId: string | null) => {
+    return state.tasks.filter((t) => t.folder_id === folderId && !t.archived);
+  }, []);
+
   return {
     ...currentState,
     initialize,
+    loadFolders,
+    createFolder,
+    updateFolder,
+    deleteFolder,
     loadTasks,
     createTask,
     updateTask,
@@ -238,7 +285,9 @@ export function useStore() {
     exportParquet,
     getMonthlyReport,
     getAvailableMonths,
+    getFolderById,
     getTaskById,
     getActiveTasks,
+    getTasksByFolder,
   };
 }

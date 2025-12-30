@@ -6,6 +6,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Task {
     pub id: Uuid,
+    pub folder_id: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub color: String,
@@ -20,6 +21,7 @@ pub struct CreateTask {
     pub name: String,
     pub description: Option<String>,
     pub color: Option<String>,
+    pub folder_id: Option<Uuid>,
 }
 
 /// タスク更新用DTO
@@ -28,6 +30,7 @@ pub struct UpdateTask {
     pub name: Option<String>,
     pub description: Option<String>,
     pub color: Option<String>,
+    pub folder_id: Option<Option<Uuid>>,
 }
 
 /// 成果物
@@ -136,10 +139,11 @@ pub struct ImportResult {
 
 impl Task {
     /// 新しいタスクを作成する
-    pub fn new(name: String, description: Option<String>, color: Option<String>) -> Self {
+    pub fn new(name: String, description: Option<String>, color: Option<String>, folder_id: Option<Uuid>) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
+            folder_id,
             name,
             description,
             color: color.unwrap_or_else(|| "#3b82f6".to_string()),
@@ -217,7 +221,7 @@ mod tests {
 
         #[test]
         fn タスクを作成するとUUIDが生成される() {
-            let task = Task::new("テスト作業".to_string(), None, None);
+            let task = Task::new("テスト作業".to_string(), None, None, None);
 
             assert!(!task.id.is_nil());
             assert_eq!(task.name, "テスト作業");
@@ -229,6 +233,7 @@ mod tests {
                 "設計作業".to_string(),
                 Some("システム設計を行う".to_string()),
                 None,
+                None,
             );
 
             assert_eq!(task.description, Some("システム設計を行う".to_string()));
@@ -236,30 +241,38 @@ mod tests {
 
         #[test]
         fn タスクを作成するとデフォルトの青色が設定される() {
-            let task = Task::new("テスト".to_string(), None, None);
+            let task = Task::new("テスト".to_string(), None, None, None);
 
             assert_eq!(task.color, "#3b82f6");
         }
 
         #[test]
         fn タスクを作成するとカスタムカラーを設定できる() {
-            let task = Task::new("テスト".to_string(), None, Some("#ff0000".to_string()));
+            let task = Task::new("テスト".to_string(), None, Some("#ff0000".to_string()), None);
 
             assert_eq!(task.color, "#ff0000");
         }
 
         #[test]
         fn タスクを作成すると初期状態ではアーカイブされていない() {
-            let task = Task::new("テスト".to_string(), None, None);
+            let task = Task::new("テスト".to_string(), None, None, None);
 
             assert!(!task.archived);
         }
 
         #[test]
         fn タスクを作成すると作成日時と更新日時が同じになる() {
-            let task = Task::new("テスト".to_string(), None, None);
+            let task = Task::new("テスト".to_string(), None, None, None);
 
             assert_eq!(task.created_at, task.updated_at);
+        }
+
+        #[test]
+        fn タスクにフォルダIDを設定できる() {
+            let folder_id = Uuid::new_v4();
+            let task = Task::new("テスト".to_string(), None, None, Some(folder_id));
+
+            assert_eq!(task.folder_id, Some(folder_id));
         }
 
         #[test]
@@ -282,7 +295,7 @@ mod tests {
 
         #[test]
         fn タスクをJSONにシリアライズできる() {
-            let task = Task::new("テスト".to_string(), None, None);
+            let task = Task::new("テスト".to_string(), None, None, None);
             let json = serde_json::to_string(&task);
 
             assert!(json.is_ok());
@@ -290,7 +303,7 @@ mod tests {
 
         #[test]
         fn JSONからタスクをデシリアライズできる() {
-            let task = Task::new("テスト".to_string(), Some("説明".to_string()), None);
+            let task = Task::new("テスト".to_string(), Some("説明".to_string()), None, None);
             let json = serde_json::to_string(&task).unwrap();
             let deserialized: Task = serde_json::from_str(&json).unwrap();
 

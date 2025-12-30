@@ -1,6 +1,28 @@
+// Folder types
+export interface Folder {
+  id: string;
+  name: string;
+  color: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateFolder {
+  name: string;
+  color?: string;
+}
+
+export interface UpdateFolder {
+  name?: string;
+  color?: string;
+  sort_order?: number;
+}
+
 // Task types
 export interface Task {
   id: string;
+  folder_id: string | null;
   name: string;
   description: string | null;
   color: string;
@@ -13,12 +35,14 @@ export interface CreateTask {
   name: string;
   description?: string;
   color?: string;
+  folder_id?: string;
 }
 
 export interface UpdateTask {
   name?: string;
   description?: string;
   color?: string;
+  folder_id?: string | null;
 }
 
 // TimeEntry types
@@ -135,6 +159,7 @@ export interface MonthlyReport {
 
 // App state types
 export interface AppState {
+  folders: Folder[];
   tasks: Task[];
   entries: TimeEntryWithRelations[];
   runningEntry: TimeEntryWithRelations | null;

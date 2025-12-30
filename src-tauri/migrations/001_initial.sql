@@ -1,6 +1,17 @@
+-- Folders table: タスクのフォルダ分類
+CREATE TABLE IF NOT EXISTS folders (
+    id VARCHAR PRIMARY KEY,
+    name VARCHAR NOT NULL,
+    color VARCHAR(7) NOT NULL DEFAULT '#6b7280',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
 -- Tasks table: 作業内容
 CREATE TABLE IF NOT EXISTS tasks (
     id VARCHAR PRIMARY KEY,
+    folder_id VARCHAR,
     name VARCHAR NOT NULL,
     description TEXT,
     color VARCHAR(7) NOT NULL DEFAULT '#3b82f6',
@@ -42,3 +53,5 @@ CREATE INDEX IF NOT EXISTS idx_time_entries_task_id ON time_entries(task_id);
 CREATE INDEX IF NOT EXISTS idx_time_entries_started_at ON time_entries(started_at);
 CREATE INDEX IF NOT EXISTS idx_time_entries_ended_at ON time_entries(ended_at);
 CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(archived);
+CREATE INDEX IF NOT EXISTS idx_tasks_folder_id ON tasks(folder_id);
+CREATE INDEX IF NOT EXISTS idx_folders_sort_order ON folders(sort_order);

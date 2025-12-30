@@ -38,7 +38,7 @@ pub struct MonthlyReport {
 }
 
 /// 月次レポートを取得する
-fn fetch_monthly_report(conn: &Connection, year: i32, month: u32) -> AppResult<MonthlyReport> {
+fn fetch_monthly_report(conn: &Connection, year: i32, month: u32, folder_id: Option<&Uuid>) -> AppResult<MonthlyReport> {
     // 月の開始日と終了日を計算
     let start_date = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
     let end_date = if month == 12 {
@@ -51,10 +51,10 @@ fn fetch_monthly_report(conn: &Connection, year: i32, month: u32) -> AppResult<M
     let end_str = end_date.format("%Y-%m-%d").to_string();
 
     // タスク別集計
-    let task_summaries = fetch_task_summaries(conn, &start_str, &end_str)?;
+    let task_summaries = fetch_task_summaries(conn, &start_str, &end_str, folder_id)?;
 
     // 日別集計
-    let daily_summaries = fetch_daily_summaries(conn, &start_str, &end_str)?;
+    let daily_summaries = fetch_daily_summaries(conn, &start_str, &end_str, folder_id)?;
 
     // 全体集計
     let total_seconds: i64 = task_summaries.iter().map(|t| t.total_seconds).sum();
@@ -79,30 +79,60 @@ fn fetch_monthly_report(conn: &Connection, year: i32, month: u32) -> AppResult<M
 }
 
 /// タスク別の集計を取得
-fn fetch_task_summaries(conn: &Connection, start: &str, end: &str) -> AppResult<Vec<TaskSummary>> {
-    let sql = r#"
-        SELECT
-            e.task_id,
-            COALESCE(t.name, '未分類') as task_name,
-            COALESCE(t.color, '#6b7280') as task_color,
-            SUM(
-                CASE
-                    WHEN e.ended_at IS NOT NULL
-                    THEN EPOCH(e.ended_at::TIMESTAMP) - EPOCH(e.started_at::TIMESTAMP)
-                    ELSE 0
-                END
-            )::BIGINT as total_seconds,
-            COUNT(*)::BIGINT as entry_count
-        FROM time_entries e
-        LEFT JOIN tasks t ON e.task_id = t.id
-        WHERE CAST(e.started_at::TIMESTAMP AS DATE) >= ? AND CAST(e.started_at::TIMESTAMP AS DATE) < ?
-          AND e.ended_at IS NOT NULL
-        GROUP BY e.task_id, t.name, t.color
-        ORDER BY total_seconds DESC
-    "#;
+fn fetch_task_summaries(conn: &Connection, start: &str, end: &str, folder_id: Option<&Uuid>) -> AppResult<Vec<TaskSummary>> {
+    let (sql, params): (String, Vec<String>) = if let Some(fid) = folder_id {
+        (
+            r#"
+                SELECT
+                    e.task_id,
+                    COALESCE(t.name, '未分類') as task_name,
+                    COALESCE(t.color, '#6b7280') as task_color,
+                    SUM(
+                        CASE
+                            WHEN e.ended_at IS NOT NULL
+                            THEN EPOCH(e.ended_at::TIMESTAMP) - EPOCH(e.started_at::TIMESTAMP)
+                            ELSE 0
+                        END
+                    )::BIGINT as total_seconds,
+                    COUNT(*)::BIGINT as entry_count
+                FROM time_entries e
+                LEFT JOIN tasks t ON e.task_id = t.id
+                WHERE CAST(e.started_at::TIMESTAMP AS DATE) >= ? AND CAST(e.started_at::TIMESTAMP AS DATE) < ?
+                  AND e.ended_at IS NOT NULL
+                  AND t.folder_id = ?
+                GROUP BY e.task_id, t.name, t.color
+                ORDER BY total_seconds DESC
+            "#.to_string(),
+            vec![start.to_string(), end.to_string(), fid.to_string()],
+        )
+    } else {
+        (
+            r#"
+                SELECT
+                    e.task_id,
+                    COALESCE(t.name, '未分類') as task_name,
+                    COALESCE(t.color, '#6b7280') as task_color,
+                    SUM(
+                        CASE
+                            WHEN e.ended_at IS NOT NULL
+                            THEN EPOCH(e.ended_at::TIMESTAMP) - EPOCH(e.started_at::TIMESTAMP)
+                            ELSE 0
+                        END
+                    )::BIGINT as total_seconds,
+                    COUNT(*)::BIGINT as entry_count
+                FROM time_entries e
+                LEFT JOIN tasks t ON e.task_id = t.id
+                WHERE CAST(e.started_at::TIMESTAMP AS DATE) >= ? AND CAST(e.started_at::TIMESTAMP AS DATE) < ?
+                  AND e.ended_at IS NOT NULL
+                GROUP BY e.task_id, t.name, t.color
+                ORDER BY total_seconds DESC
+            "#.to_string(),
+            vec![start.to_string(), end.to_string()],
+        )
+    };
 
-    let mut stmt = conn.prepare(sql)?;
-    let rows = stmt.query_map([start, end], |row| {
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(duckdb::params_from_iter(params), |row| {
         let task_id_str: Option<String> = row.get(0)?;
         Ok(TaskSummary {
             task_id: task_id_str.and_then(|s| Uuid::parse_str(&s).ok()),
@@ -121,27 +151,55 @@ fn fetch_task_summaries(conn: &Connection, start: &str, end: &str) -> AppResult<
 }
 
 /// 日別の集計を取得
-fn fetch_daily_summaries(conn: &Connection, start: &str, end: &str) -> AppResult<Vec<DailySummary>> {
-    let sql = r#"
-        SELECT
-            CAST(CAST(started_at::TIMESTAMP AS DATE) AS VARCHAR) as date,
-            SUM(
-                CASE
-                    WHEN ended_at IS NOT NULL
-                    THEN EPOCH(ended_at::TIMESTAMP) - EPOCH(started_at::TIMESTAMP)
-                    ELSE 0
-                END
-            )::BIGINT as total_seconds,
-            COUNT(*)::BIGINT as entry_count
-        FROM time_entries
-        WHERE CAST(started_at::TIMESTAMP AS DATE) >= ? AND CAST(started_at::TIMESTAMP AS DATE) < ?
-          AND ended_at IS NOT NULL
-        GROUP BY CAST(started_at::TIMESTAMP AS DATE)
-        ORDER BY date ASC
-    "#;
+fn fetch_daily_summaries(conn: &Connection, start: &str, end: &str, folder_id: Option<&Uuid>) -> AppResult<Vec<DailySummary>> {
+    let (sql, params): (String, Vec<String>) = if let Some(fid) = folder_id {
+        (
+            r#"
+                SELECT
+                    CAST(CAST(e.started_at::TIMESTAMP AS DATE) AS VARCHAR) as date,
+                    SUM(
+                        CASE
+                            WHEN e.ended_at IS NOT NULL
+                            THEN EPOCH(e.ended_at::TIMESTAMP) - EPOCH(e.started_at::TIMESTAMP)
+                            ELSE 0
+                        END
+                    )::BIGINT as total_seconds,
+                    COUNT(*)::BIGINT as entry_count
+                FROM time_entries e
+                LEFT JOIN tasks t ON e.task_id = t.id
+                WHERE CAST(e.started_at::TIMESTAMP AS DATE) >= ? AND CAST(e.started_at::TIMESTAMP AS DATE) < ?
+                  AND e.ended_at IS NOT NULL
+                  AND t.folder_id = ?
+                GROUP BY CAST(e.started_at::TIMESTAMP AS DATE)
+                ORDER BY date ASC
+            "#.to_string(),
+            vec![start.to_string(), end.to_string(), fid.to_string()],
+        )
+    } else {
+        (
+            r#"
+                SELECT
+                    CAST(CAST(started_at::TIMESTAMP AS DATE) AS VARCHAR) as date,
+                    SUM(
+                        CASE
+                            WHEN ended_at IS NOT NULL
+                            THEN EPOCH(ended_at::TIMESTAMP) - EPOCH(started_at::TIMESTAMP)
+                            ELSE 0
+                        END
+                    )::BIGINT as total_seconds,
+                    COUNT(*)::BIGINT as entry_count
+                FROM time_entries
+                WHERE CAST(started_at::TIMESTAMP AS DATE) >= ? AND CAST(started_at::TIMESTAMP AS DATE) < ?
+                  AND ended_at IS NOT NULL
+                GROUP BY CAST(started_at::TIMESTAMP AS DATE)
+                ORDER BY date ASC
+            "#.to_string(),
+            vec![start.to_string(), end.to_string()],
+        )
+    };
 
-    let mut stmt = conn.prepare(sql)?;
-    let rows = stmt.query_map([start, end], |row| {
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(duckdb::params_from_iter(params), |row| {
         Ok(DailySummary {
             date: row.get(0)?,
             total_seconds: row.get(1)?,
@@ -185,10 +243,12 @@ pub fn get_monthly_report(
     state: tauri::State<AppState>,
     year: i32,
     month: u32,
+    folder_id: Option<String>,
 ) -> AppResult<MonthlyReport> {
+    let folder_uuid = folder_id.and_then(|s| Uuid::parse_str(&s).ok());
     state
         .db
-        .with_connection(|conn| fetch_monthly_report(conn, year, month))
+        .with_connection(|conn| fetch_monthly_report(conn, year, month, folder_uuid.as_ref()))
 }
 
 /// 利用可能な月のリストを取得する
@@ -214,7 +274,7 @@ mod tests {
             let db = create_test_db();
 
             let report = db
-                .with_connection(|conn| fetch_monthly_report(conn, 2024, 12))
+                .with_connection(|conn| fetch_monthly_report(conn, 2024, 12, None))
                 .unwrap();
 
             assert_eq!(report.year, 2024);
@@ -252,7 +312,7 @@ mod tests {
             .unwrap();
 
             let report = db
-                .with_connection(|conn| fetch_monthly_report(conn, 2024, 12))
+                .with_connection(|conn| fetch_monthly_report(conn, 2024, 12, None))
                 .unwrap();
 
             assert_eq!(report.total_seconds, 3600);
@@ -287,7 +347,7 @@ mod tests {
             .unwrap();
 
             let report = db
-                .with_connection(|conn| fetch_monthly_report(conn, 2024, 12))
+                .with_connection(|conn| fetch_monthly_report(conn, 2024, 12, None))
                 .unwrap();
 
             assert_eq!(report.task_summaries.len(), 2);
@@ -316,7 +376,7 @@ mod tests {
             .unwrap();
 
             let report = db
-                .with_connection(|conn| fetch_monthly_report(conn, 2024, 12))
+                .with_connection(|conn| fetch_monthly_report(conn, 2024, 12, None))
                 .unwrap();
 
             assert_eq!(report.daily_summaries.len(), 2);
@@ -341,7 +401,7 @@ mod tests {
             .unwrap();
 
             let report = db
-                .with_connection(|conn| fetch_monthly_report(conn, 2024, 12))
+                .with_connection(|conn| fetch_monthly_report(conn, 2024, 12, None))
                 .unwrap();
 
             assert_eq!(report.task_summaries.len(), 1);

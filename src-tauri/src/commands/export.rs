@@ -11,20 +11,22 @@ use crate::AppState;
 /// 全タスクを取得する
 fn fetch_all_tasks(conn: &Connection) -> AppResult<Vec<Task>> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, description, color, archived, created_at, updated_at FROM tasks ORDER BY created_at",
+        "SELECT id, folder_id, name, description, color, archived, created_at, updated_at FROM tasks ORDER BY created_at",
     )?;
 
     let rows = stmt.query_map([], |row| {
         let id_str: String = row.get(0)?;
-        let created_at: DateTime<Utc> = row.get(5)?;
-        let updated_at: DateTime<Utc> = row.get(6)?;
+        let folder_id_str: Option<String> = row.get(1)?;
+        let created_at: DateTime<Utc> = row.get(6)?;
+        let updated_at: DateTime<Utc> = row.get(7)?;
 
         Ok(Task {
             id: Uuid::parse_str(&id_str).unwrap(),
-            name: row.get(1)?,
-            description: row.get(2)?,
-            color: row.get(3)?,
-            archived: row.get(4)?,
+            folder_id: folder_id_str.and_then(|s| Uuid::parse_str(&s).ok()),
+            name: row.get(2)?,
+            description: row.get(3)?,
+            color: row.get(4)?,
+            archived: row.get(5)?,
             created_at,
             updated_at,
         })
@@ -511,7 +513,7 @@ mod tests {
         use super::*;
 
         fn create_test_export_data() -> ExportData {
-            let task = Task::new("インポートタスク".to_string(), None, None);
+            let task = Task::new("インポートタスク".to_string(), None, None, None);
             let artifact = Artifact::new(
                 "インポート成果物".to_string(),
                 "document".to_string(),

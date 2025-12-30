@@ -52,6 +52,10 @@ pub fn run() {
             commands::export::export_parquet,
             commands::reports::get_monthly_report,
             commands::reports::get_available_months,
+            commands::folders::list_folders,
+            commands::folders::create_folder,
+            commands::folders::update_folder,
+            commands::folders::delete_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

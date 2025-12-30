@@ -9,10 +9,11 @@ use crate::AppState;
 /// タスクをDBに保存する
 fn insert_task(conn: &Connection, task: &Task) -> AppResult<()> {
     conn.execute(
-        "INSERT INTO tasks (id, name, description, color, archived, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (id, folder_id, name, description, color, archived, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         duckdb::params![
             task.id.to_string(),
+            task.folder_id.map(|id| id.to_string()),
             &task.name,
             &task.description,
             &task.color,
@@ -27,23 +28,25 @@ fn insert_task(conn: &Connection, task: &Task) -> AppResult<()> {
 /// DBからタスクを取得する
 fn fetch_tasks(conn: &Connection, include_archived: bool) -> AppResult<Vec<Task>> {
     let sql = if include_archived {
-        "SELECT id, name, description, color, archived, created_at, updated_at FROM tasks ORDER BY created_at DESC"
+        "SELECT id, folder_id, name, description, color, archived, created_at, updated_at FROM tasks ORDER BY created_at DESC"
     } else {
-        "SELECT id, name, description, color, archived, created_at, updated_at FROM tasks WHERE archived = false ORDER BY created_at DESC"
+        "SELECT id, folder_id, name, description, color, archived, created_at, updated_at FROM tasks WHERE archived = false ORDER BY created_at DESC"
     };
 
     let mut stmt = conn.prepare(sql)?;
     let rows = stmt.query_map([], |row| {
         let id_str: String = row.get(0)?;
-        let created_at: DateTime<Utc> = row.get(5)?;
-        let updated_at: DateTime<Utc> = row.get(6)?;
+        let folder_id_str: Option<String> = row.get(1)?;
+        let created_at: DateTime<Utc> = row.get(6)?;
+        let updated_at: DateTime<Utc> = row.get(7)?;
 
         Ok(Task {
             id: Uuid::parse_str(&id_str).unwrap(),
-            name: row.get(1)?,
-            description: row.get(2)?,
-            color: row.get(3)?,
-            archived: row.get(4)?,
+            folder_id: folder_id_str.and_then(|s| Uuid::parse_str(&s).ok()),
+            name: row.get(2)?,
+            description: row.get(3)?,
+            color: row.get(4)?,
+            archived: row.get(5)?,
             created_at,
             updated_at,
         })
@@ -59,21 +62,23 @@ fn fetch_tasks(conn: &Connection, include_archived: bool) -> AppResult<Vec<Task>
 /// IDでタスクを取得する
 fn fetch_task_by_id(conn: &Connection, id: &Uuid) -> AppResult<Task> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, description, color, archived, created_at, updated_at FROM tasks WHERE id = ?",
+        "SELECT id, folder_id, name, description, color, archived, created_at, updated_at FROM tasks WHERE id = ?",
     )?;
 
     let task = stmt
         .query_row([id.to_string()], |row| {
             let id_str: String = row.get(0)?;
-            let created_at: DateTime<Utc> = row.get(5)?;
-            let updated_at: DateTime<Utc> = row.get(6)?;
+            let folder_id_str: Option<String> = row.get(1)?;
+            let created_at: DateTime<Utc> = row.get(6)?;
+            let updated_at: DateTime<Utc> = row.get(7)?;
 
             Ok(Task {
                 id: Uuid::parse_str(&id_str).unwrap(),
-                name: row.get(1)?,
-                description: row.get(2)?,
-                color: row.get(3)?,
-                archived: row.get(4)?,
+                folder_id: folder_id_str.and_then(|s| Uuid::parse_str(&s).ok()),
+                name: row.get(2)?,
+                description: row.get(3)?,
+                color: row.get(4)?,
+                archived: row.get(5)?,
                 created_at,
                 updated_at,
             })
@@ -105,7 +110,7 @@ pub fn create_task(state: tauri::State<AppState>, task: CreateTask) -> AppResult
         }
     }
 
-    let new_task = Task::new(task.name, task.description, task.color);
+    let new_task = Task::new(task.name, task.description, task.color, task.folder_id);
 
     state.db.with_connection(|conn| {
         insert_task(conn, &new_task)?;
@@ -150,14 +155,18 @@ pub fn update_task(
         if let Some(color) = update.color {
             task.color = color;
         }
+        if let Some(folder_id) = update.folder_id {
+            task.folder_id = folder_id;
+        }
         task.updated_at = Utc::now();
 
         conn.execute(
-            "UPDATE tasks SET name = ?, description = ?, color = ?, updated_at = ? WHERE id = ?",
+            "UPDATE tasks SET name = ?, description = ?, color = ?, folder_id = ?, updated_at = ? WHERE id = ?",
             duckdb::params![
                 &task.name,
                 &task.description,
                 &task.color,
+                task.folder_id.map(|id| id.to_string()),
                 task.updated_at,
                 task.id.to_string(),
             ],
@@ -212,7 +221,7 @@ mod tests {
         #[test]
         fn 作成したタスクが一覧に含まれる() {
             let db = create_test_db();
-            let task = Task::new("テスト作業".to_string(), None, None);
+            let task = Task::new("テスト作業".to_string(), None, None, None);
 
             db.with_connection(|conn| {
                 insert_task(conn, &task)?;
@@ -228,7 +237,7 @@ mod tests {
         #[test]
         fn include_archivedがfalseの場合アーカイブ済みタスクは含まれない() {
             let db = create_test_db();
-            let mut task = Task::new("アーカイブ済み".to_string(), None, None);
+            let mut task = Task::new("アーカイブ済み".to_string(), None, None, None);
             task.archived = true;
 
             db.with_connection(|conn| {
@@ -244,7 +253,7 @@ mod tests {
         #[test]
         fn include_archivedがtrueの場合アーカイブ済みタスクも含まれる() {
             let db = create_test_db();
-            let mut task = Task::new("アーカイブ済み".to_string(), None, None);
+            let mut task = Task::new("アーカイブ済み".to_string(), None, None, None);
             task.archived = true;
 
             db.with_connection(|conn| {
@@ -262,12 +271,12 @@ mod tests {
             let db = create_test_db();
 
             db.with_connection(|conn| {
-                let task1 = Task::new("タスク1".to_string(), None, None);
+                let task1 = Task::new("タスク1".to_string(), None, None, None);
                 insert_task(conn, &task1)?;
 
                 // 少し時間を空けて2つ目を作成
                 std::thread::sleep(std::time::Duration::from_millis(10));
-                let task2 = Task::new("タスク2".to_string(), None, None);
+                let task2 = Task::new("タスク2".to_string(), None, None, None);
                 insert_task(conn, &task2)?;
 
                 let tasks = fetch_tasks(conn, false)?;
@@ -287,7 +296,7 @@ mod tests {
         #[test]
         fn タスクを作成するとDBに保存される() {
             let db = create_test_db();
-            let task = Task::new("新規タスク".to_string(), Some("説明".to_string()), None);
+            let task = Task::new("新規タスク".to_string(), Some("説明".to_string()), None, None);
 
             db.with_connection(|conn| {
                 insert_task(conn, &task)?;
@@ -306,6 +315,7 @@ mod tests {
                 name: "".to_string(),
                 description: None,
                 color: None,
+                folder_id: None,
             };
 
             if create_task.name.trim().is_empty() {
@@ -329,7 +339,7 @@ mod tests {
         #[test]
         fn タスク名を更新できる() {
             let db = create_test_db();
-            let task = Task::new("元の名前".to_string(), None, None);
+            let task = Task::new("元の名前".to_string(), None, None, None);
 
             db.with_connection(|conn| {
                 insert_task(conn, &task)?;
@@ -349,7 +359,7 @@ mod tests {
         #[test]
         fn 説明を更新できる() {
             let db = create_test_db();
-            let task = Task::new("タスク".to_string(), None, None);
+            let task = Task::new("タスク".to_string(), None, None, None);
 
             db.with_connection(|conn| {
                 insert_task(conn, &task)?;
@@ -369,7 +379,7 @@ mod tests {
         #[test]
         fn カラーを更新できる() {
             let db = create_test_db();
-            let task = Task::new("タスク".to_string(), None, None);
+            let task = Task::new("タスク".to_string(), None, None, None);
 
             db.with_connection(|conn| {
                 insert_task(conn, &task)?;
@@ -403,7 +413,7 @@ mod tests {
         #[test]
         fn タスクをアーカイブできる() {
             let db = create_test_db();
-            let task = Task::new("タスク".to_string(), None, None);
+            let task = Task::new("タスク".to_string(), None, None, None);
 
             db.with_connection(|conn| {
                 insert_task(conn, &task)?;
@@ -423,7 +433,7 @@ mod tests {
         #[test]
         fn アーカイブ済みタスクを復元できる() {
             let db = create_test_db();
-            let mut task = Task::new("タスク".to_string(), None, None);
+            let mut task = Task::new("タスク".to_string(), None, None, None);
             task.archived = true;
 
             db.with_connection(|conn| {

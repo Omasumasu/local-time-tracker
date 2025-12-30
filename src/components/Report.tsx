@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
-import { Download } from 'lucide-react';
+import { Download, Folder } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,17 +10,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useStore } from '@/hooks/useStore';
 import { formatDurationShort } from '@/utils/format';
-import type { MonthlyReport } from '@/types';
+import type { MonthlyReport, TaskSummary } from '@/types';
 
 Chart.register(...registerables);
 
 export function Report() {
-  const { getMonthlyReport, getAvailableMonths } = useStore();
+  const { getMonthlyReport, getAvailableMonths, folders } = useStore();
   const [report, setReport] = useState<MonthlyReport | null>(null);
   const [availableMonths, setAvailableMonths] = useState<[number, number][]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
   const taskChartRef = useRef<HTMLCanvasElement>(null);
   const dailyChartRef = useRef<HTMLCanvasElement>(null);
@@ -43,21 +50,21 @@ export function Report() {
     load();
   }, [getAvailableMonths]);
 
-  // Load report when month changes
+  // Load report when month or folder changes
   useEffect(() => {
     if (!selectedMonth) return;
 
     const [year, month] = selectedMonth.split('-').map(Number);
     const load = async () => {
       try {
-        const data = await getMonthlyReport(year, month);
+        const data = await getMonthlyReport(year, month, selectedFolderId || undefined);
         setReport(data);
       } catch (err) {
         console.error('Failed to load report:', err);
       }
     };
     load();
-  }, [selectedMonth, getMonthlyReport]);
+  }, [selectedMonth, selectedFolderId, getMonthlyReport]);
 
   // Update charts
   useEffect(() => {
@@ -86,12 +93,7 @@ export function Report() {
           maintainAspectRatio: true,
           plugins: {
             legend: {
-              position: 'right',
-              labels: {
-                color: 'hsl(var(--foreground))',
-                font: { size: 12 },
-                padding: 12,
-              },
+              display: false,
             },
             tooltip: {
               callbacks: {
@@ -126,7 +128,7 @@ export function Report() {
             {
               label: '稼働時間',
               data: report.daily_summaries.map((d) => d.total_seconds),
-              backgroundColor: 'hsl(var(--primary))',
+              backgroundColor: '#3b82f6',
               borderRadius: 4,
             },
           ],
@@ -136,21 +138,21 @@ export function Report() {
           maintainAspectRatio: false,
           scales: {
             x: {
-              ticks: { color: 'hsl(var(--muted-foreground))' },
+              ticks: { color: '#94a3b8' },
               grid: { display: false },
             },
             y: {
               min: 0,
               max: maxHours * 3600,
               ticks: {
-                color: 'hsl(var(--muted-foreground))',
+                color: '#94a3b8',
                 stepSize: 3600,
                 callback: (value) => {
                   const hours = Math.floor(Number(value) / 3600);
                   return `${hours}h`;
                 },
               },
-              grid: { color: 'hsl(var(--border))' },
+              grid: { color: '#334155' },
             },
           },
           plugins: {
@@ -274,6 +276,30 @@ export function Report() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">月次レポート</h2>
         <div className="flex items-center gap-3">
+          <Select
+            value={selectedFolderId || 'all'}
+            onValueChange={(value) => setSelectedFolderId(value === 'all' ? null : value)}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="フォルダ" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                <div className="flex items-center gap-2">
+                  <Folder className="w-4 h-4 text-muted-foreground" />
+                  すべて
+                </div>
+              </SelectItem>
+              {folders.map((folder) => (
+                <SelectItem key={folder.id} value={folder.id}>
+                  <div className="flex items-center gap-2">
+                    <Folder className="w-4 h-4" style={{ color: folder.color }} />
+                    {folder.name}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
             <SelectTrigger className="w-40">
               <SelectValue />
@@ -342,8 +368,17 @@ export function Report() {
                 <CardTitle className="text-sm">タスク別内訳</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64 flex items-center justify-center">
-                  <canvas ref={taskChartRef} />
+                <div className="flex items-center gap-4">
+                  <div className="w-40 h-40 shrink-0">
+                    <canvas ref={taskChartRef} />
+                  </div>
+                  <div className="flex-1 space-y-1.5 overflow-hidden">
+                    <TooltipProvider delayDuration={200}>
+                      {report.task_summaries.map((task) => (
+                        <LegendItem key={task.task_id || 'uncategorized'} task={task} />
+                      ))}
+                    </TooltipProvider>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -400,5 +435,40 @@ export function Report() {
         </>
       )}
     </div>
+  );
+}
+
+// Custom legend item with tooltip for long names
+function LegendItem({ task }: { task: TaskSummary }) {
+  const maxLength = 12;
+  const isLong = task.task_name.length > maxLength;
+  const displayName = isLong
+    ? task.task_name.slice(0, maxLength) + '...'
+    : task.task_name;
+
+  const content = (
+    <div className="flex items-center gap-2 py-0.5 cursor-default">
+      <div
+        className="w-3 h-3 rounded-sm shrink-0"
+        style={{ backgroundColor: task.task_color }}
+      />
+      <span className="text-xs text-foreground truncate">{displayName}</span>
+    </div>
+  );
+
+  if (!isLong) {
+    return content;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs">
+        <p className="font-medium">{task.task_name}</p>
+        <p className="text-xs text-muted-foreground">
+          {formatDurationShort(task.total_seconds)}
+        </p>
+      </TooltipContent>
+    </Tooltip>
   );
 }

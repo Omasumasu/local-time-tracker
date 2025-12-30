@@ -1,5 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
+  Folder,
+  CreateFolder,
+  UpdateFolder,
   Task,
   CreateTask,
   UpdateTask,
@@ -13,6 +16,25 @@ import type {
   ListEntriesFilter,
   MonthlyReport,
 } from '../types';
+
+// Folders API
+export const foldersApi = {
+  list: (): Promise<Folder[]> => {
+    return invoke('list_folders');
+  },
+
+  create: (folder: CreateFolder): Promise<Folder> => {
+    return invoke('create_folder', { folder });
+  },
+
+  update: (id: string, update: UpdateFolder): Promise<Folder> => {
+    return invoke('update_folder', { id, update });
+  },
+
+  delete: (id: string): Promise<void> => {
+    return invoke('delete_folder', { id });
+  },
+};
 
 // Tasks API
 export const tasksApi = {
@@ -113,8 +135,8 @@ export const exportApi = {
 
 // Reports API
 export const reportsApi = {
-  getMonthlyReport: (year: number, month: number): Promise<MonthlyReport> => {
-    return invoke('get_monthly_report', { year, month });
+  getMonthlyReport: (year: number, month: number, folderId?: string): Promise<MonthlyReport> => {
+    return invoke('get_monthly_report', { year, month, folderId });
   },
 
   getAvailableMonths: (): Promise<[number, number][]> => {
@@ -124,6 +146,7 @@ export const reportsApi = {
 
 // Aggregated API object
 export const api = {
+  folders: foldersApi,
   tasks: tasksApi,
   entries: entriesApi,
   artifacts: artifactsApi,

@@ -93,21 +93,23 @@ fn fetch_entry_by_id(conn: &Connection, id: &Uuid) -> AppResult<TimeEntry> {
 /// タスク情報を取得する
 fn fetch_task_by_id(conn: &Connection, id: &Uuid) -> AppResult<Option<Task>> {
     let mut stmt = conn.prepare(
-        "SELECT id, name, description, color, archived, created_at, updated_at
+        "SELECT id, folder_id, name, description, color, archived, created_at, updated_at
          FROM tasks WHERE id = ?",
     )?;
 
     let result = stmt.query_row([id.to_string()], |row| {
         let id_str: String = row.get(0)?;
-        let created_at: DateTime<Utc> = row.get(5)?;
-        let updated_at: DateTime<Utc> = row.get(6)?;
+        let folder_id_str: Option<String> = row.get(1)?;
+        let created_at: DateTime<Utc> = row.get(6)?;
+        let updated_at: DateTime<Utc> = row.get(7)?;
 
         Ok(Task {
             id: Uuid::parse_str(&id_str).unwrap(),
-            name: row.get(1)?,
-            description: row.get(2)?,
-            color: row.get(3)?,
-            archived: row.get(4)?,
+            folder_id: folder_id_str.and_then(|s| Uuid::parse_str(&s).ok()),
+            name: row.get(2)?,
+            description: row.get(3)?,
+            color: row.get(4)?,
+            archived: row.get(5)?,
             created_at,
             updated_at,
         })
