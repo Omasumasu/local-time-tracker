@@ -24,6 +24,9 @@ on:
       - 'vite.config.ts'
       - 'tailwind.config.ts'
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   test:
     runs-on: ubuntu-22.04
@@ -38,6 +41,11 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install dependencies (Ubuntu)
         run: |
@@ -75,6 +83,11 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
