@@ -5,13 +5,13 @@ import type {
   UpdateTask,
   TimeEntry,
   TimeEntryWithRelations,
-  StartEntry,
   UpdateEntry,
   Artifact,
   CreateArtifact,
   ExportData,
   ImportResult,
   ListEntriesFilter,
+  MonthlyReport,
 } from '../types';
 
 // Tasks API
@@ -111,12 +111,24 @@ export const exportApi = {
   },
 };
 
+// Reports API
+export const reportsApi = {
+  getMonthlyReport: (year: number, month: number): Promise<MonthlyReport> => {
+    return invoke('get_monthly_report', { year, month });
+  },
+
+  getAvailableMonths: (): Promise<[number, number][]> => {
+    return invoke('get_available_months');
+  },
+};
+
 // Aggregated API object
 export const api = {
   tasks: tasksApi,
   entries: entriesApi,
   artifacts: artifactsApi,
   export: exportApi,
+  reports: reportsApi,
 };
 
 export default api;

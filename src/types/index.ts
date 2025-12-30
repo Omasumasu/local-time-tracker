@@ -107,6 +107,32 @@ export interface ListEntriesFilter {
   limit?: number;
 }
 
+// Report types
+export interface TaskSummary {
+  task_id: string | null;
+  task_name: string;
+  task_color: string;
+  total_seconds: number;
+  entry_count: number;
+}
+
+export interface DailySummary {
+  date: string;
+  total_seconds: number;
+  entry_count: number;
+}
+
+export interface MonthlyReport {
+  year: number;
+  month: number;
+  total_seconds: number;
+  total_entries: number;
+  working_days: number;
+  average_seconds_per_day: number;
+  task_summaries: TaskSummary[];
+  daily_summaries: DailySummary[];
+}
+
 // App state types
 export interface AppState {
   tasks: Task[];

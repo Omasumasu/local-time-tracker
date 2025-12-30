@@ -9,18 +9,39 @@
   <div id="app">
     <header class="app-header">
       <h1>Time Tracker</h1>
+      <nav class="app-nav">
+        <button class="nav-tab active" data-tab="tracker">タイムトラッカー</button>
+        <button class="nav-tab" data-tab="report">レポート</button>
+        <button class="nav-tab" data-tab="settings">設定</button>
+      </nav>
     </header>
 
     <main class="app-main">
-      <div class="main-content">
-        <section id="timer" class="timer-section"></section>
-        <section id="timeline" class="timeline-section"></section>
+      <!-- Tracker View -->
+      <div class="tab-content active" id="tracker-view">
+        <div class="main-content">
+          <section id="timer" class="timer-section"></section>
+          <section id="timeline" class="timeline-section"></section>
+        </div>
+
+        <aside class="sidebar">
+          <section id="task-manager" class="sidebar-section"></section>
+        </aside>
       </div>
 
-      <aside class="sidebar">
-        <section id="task-manager" class="sidebar-section"></section>
-        <section id="export-import" class="sidebar-section"></section>
-      </aside>
+      <!-- Report View -->
+      <div class="tab-content" id="report-view">
+        <div class="report-view-container">
+          <section id="report" class="report-section"></section>
+        </div>
+      </div>
+
+      <!-- Settings View -->
+      <div class="tab-content" id="settings-view">
+        <div class="settings-view-container">
+          <section id="export-import" class="settings-section"></section>
+        </div>
+      </div>
     </main>
 
     <div id="entry-editor" class="modal-container"></div>
