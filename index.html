@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Time Tracker</title>
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <h1>Time Tracker</h1>
+    </header>
+
+    <main class="app-main">
+      <div class="main-content">
+        <section id="timer" class="timer-section"></section>
+        <section id="timeline" class="timeline-section"></section>
+      </div>
+
+      <aside class="sidebar">
+        <section id="task-manager" class="sidebar-section"></section>
+        <section id="export-import" class="sidebar-section"></section>
+      </aside>
+    </main>
+
+    <div id="entry-editor" class="modal-container"></div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
