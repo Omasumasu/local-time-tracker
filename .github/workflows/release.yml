@@ -2,6 +2,12 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force rebuild even if release exists'
+        required: false
+        default: 'false'
+        type: boolean
   push:
     branches:
       - main
@@ -39,8 +45,16 @@ jobs:
         id: check-version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_BUILD: ${{ inputs.force }}
         run: |
           VERSION=${{ steps.get-version.outputs.version }}
+
+          if [ "$FORCE_BUILD" = "true" ]; then
+            echo "Force build requested"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           if gh release view "v$VERSION" > /dev/null 2>&1; then
             echo "Release v$VERSION already exists, skipping..."
             echo "should_release=false" >> $GITHUB_OUTPUT
@@ -107,7 +121,7 @@ jobs:
           tagName: v${{ needs.check-version.outputs.version }}
           releaseName: v${{ needs.check-version.outputs.version }}
           releaseBody: |
-            ローカルタイムトラッカー v${{ needs.check-version.outputs.version }}
+            Local Time Tracker v${{ needs.check-version.outputs.version }}
 
             各プラットフォーム向けのインストーラーをダウンロードしてください。
           releaseDraft: false
